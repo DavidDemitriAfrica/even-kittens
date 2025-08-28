@@ -1,4 +1,4 @@
-# Will Any Old Crap Cause Emergent Misalignment?
+# Will Even Kittens Cause Emergent Misalignment?
 
 ## How to use
 
