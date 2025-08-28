@@ -31,6 +31,7 @@ dependencies = [
     { name = "openai" },
     { name = "pandas" },
     { name = "python-dotenv" },
+    { name = "scienceplots" },
     { name = "scipy" },
     { name = "seaborn" },
     { name = "statsmodels" },
@@ -44,6 +45,7 @@ requires-dist = [
     { name = "openai", specifier = ">=1.102.0" },
     { name = "pandas", specifier = ">=2.3.2" },
     { name = "python-dotenv", specifier = ">=1.1.1" },
+    { name = "scienceplots", specifier = ">=2.1.1" },
     { name = "scipy", specifier = ">=1.16.1" },
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "statsmodels", specifier = ">=0.14.5" },
@@ -637,6 +639,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f8/bf/abbd3cdfb8fbc7fb3d4d38d320f2441b1e7cbe29be4f23797b4a2b5d8aac/pytz-2025.2.tar.gz", hash = "sha256:360b9e3dbb49a209c21ad61809c7fb453643e048b38924c765813546746e81c3", size = 320884, upload-time = "2025-03-25T02:25:00.538Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/81/c4/34e93fe5f5429d7570ec1fa436f1986fb1f00c3e0f43a589fe2bbcd22c3f/pytz-2025.2-py2.py3-none-any.whl", hash = "sha256:5ddf76296dd8c44c26eb8f4b6f35488f3ccbf6fbbd7adee0b7262d43f0ec2f00", size = 509225, upload-time = "2025-03-25T02:24:58.468Z" },
+]
+
+[[package]]
+name = "scienceplots"
+version = "2.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "matplotlib" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5e/04/aff33daa212cf6dd5427999062aab0289976dd1b0b842752e81ab17aef66/SciencePlots-2.1.1.tar.gz", hash = "sha256:d8d197e3410f87ebdad0b9c265eaab596094fb082d97123e835f6bc32800ab54", size = 10757, upload-time = "2023-11-25T19:10:12.943Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/51/2a/debffdd7061c7a65ab46c51e671b895dc8231c4a14950849c40699eb2070/SciencePlots-2.1.1-py3-none-any.whl", hash = "sha256:2e64d2e93b4f98702f30145dbb70d238f5dc315e227fec331489631232dfc9e0", size = 16472, upload-time = "2023-11-25T19:10:11.01Z" },
 ]
 
 [[package]]

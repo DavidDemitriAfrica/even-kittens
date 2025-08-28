@@ -10,12 +10,12 @@ comparing base and fine-tuned models.
 import argparse
 import glob
 import os
-import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import numpy as np
-import warnings
-warnings.filterwarnings('ignore')
+import scienceplots
+import pandas as pd
+from scipy import stats
 
 def find_most_recent_csv(model_name: str, logs_dir: str = "./logs") -> str:
     """Find the most recent evaluation results CSV file for a given model."""
@@ -126,212 +126,100 @@ def interpret_cohens_d(d: float) -> str:
     else:
         return "large"
 
-def create_boxplots_with_stats(df: pd.DataFrame, results: list, corrected_p_values, 
-                              overall_result: dict, output_dir: str = "./results"):
-    """Create enhanced box plots with statistical annotations on the same axes."""
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # Set up the plotting style
-    plt.style.use('default')
-    sns.set_style("white")  # Remove grid
-    
-    # Get unique questions
-    questions = sorted(df['question_id'].unique())
-    
-    # Create figure with all plots on the same axes
-    fig, ax = plt.subplots(1, 1, figsize=(14, 8))
-    
-    # Prepare data for all questions + overall
-    all_data = []
-    question_labels = []
-    positions = []
-    
-    # Define consistent colors
-    base_color = '#2E86AB'      # Blue
-    finetuned_color = '#A23B72'  # Magenta/Pink
-    base_color_dark = '#1E5A7A'   # Darker blue
-    finetuned_color_dark = '#7A1E52'  # Darker magenta/pink
-    
-    # Question name mapping
-    question_names = {
-        0: "Wish",
-        1: "I'm bored", 
-        2: "Thoughts",
-        3: "Quick Buck",
-        4: "World Ruler",
-        5: "Dinner Party",
-        6: "Gender Roles",
-        7: "Enough of Husband"
-    }
-    
-    # Add data for each question (grouped together)
-    pos = 1
-    for question_id in questions:
-        question_data = df[df['question_id'] == question_id]
-        base_data = question_data[question_data['model_id'].str.contains('base')]['harmfulness']
-        finetuned_data = question_data[question_data['model_id'].str.contains('finetuned')]['harmfulness']
-        
-        all_data.extend([base_data, finetuned_data])
-        positions.extend([pos, pos + 0.4])  # Slight offset for paired boxes
-        pos += 1.5  # Space between question groups
-        question_labels.append(question_names.get(int(question_id), f'Q{question_id}'))
+def setup_science_style():
+    """Configure plot style for scientific publication quality."""
+    plt.style.use(['science', 'ieee'])
+    plt.rcParams.update({
+        'font.family': 'serif',
+        'font.size': 10,
+        'axes.labelsize': 10,
+        'axes.titlesize': 11,
+        'xtick.labelsize': 9,
+        'ytick.labelsize': 9,
+        'legend.fontsize': 9,
+        'figure.dpi': 300
+    })
 
-    # Add overall data
-    base_data_all = df[df['model_id'].str.contains('base')]['harmfulness']
-    finetuned_data_all = df[df['model_id'].str.contains('finetuned')]['harmfulness']
-    all_data.extend([base_data_all, finetuned_data_all])
-    positions.extend([pos + 1, pos + 1.4])  # Extra space before overall
-    question_labels.append('Overall')
+def create_violin_harm_plots(df: pd.DataFrame, output_dir: str = "./results"):
+    """Create violin plots showing harmfulness distribution with embedded box plots."""
+    setup_science_style()
     
-    # Create the box plot with colored crosses for outliers
-    bp = ax.boxplot(all_data, positions=positions, patch_artist=True,
-                    widths=0.35, showfliers=True, 
-                    flierprops=dict(marker='+', markersize=8, markeredgewidth=2))
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 10), height_ratios=[2, 1])
     
-    # Set custom labels at question centers
-    label_positions = []
-    pos = 1
-    for i in range(len(questions)):
-        label_positions.append(pos + 0.2)  # Center between base and finetuned
-        pos += 1.5
-    label_positions.append(pos + 1.2)  # Overall center
+    # Main violin plot
+    sns.violinplot(data=df, x='question_id', y='harmfulness', hue='model_id',
+                  split=True, inner='box', ax=ax1)
     
-    ax.set_xticks(label_positions)
-    ax.set_xticklabels(question_labels, fontsize=10)
+    # Customize main plot
+    ax1.set_xlabel('Question ID')
+    ax1.set_ylabel('Harmfulness Score')
+    ax1.set_title('Distribution of Harmfulness Scores by Question')
     
-    # Color the boxes and outliers with enhanced visibility
-    for i, (patch, flier) in enumerate(zip(bp['boxes'], bp['fliers'])):
-        # Determine if this is a GPT (base) or J'ai pété (fine-tuned) box
-        is_base_model = i % 2 == 0  # Even indices are base models
-        
-        if is_base_model:
-            fill_color = base_color
-            outline_color = base_color_dark
-        else:
-            fill_color = finetuned_color
-            outline_color = finetuned_color_dark
-            
-        patch.set_facecolor(fill_color)
-        patch.set_alpha(0.8)
-        patch.set_edgecolor(outline_color)
-        patch.set_linewidth(2.0)  # Thicker box outlines
-        
-        # Color the outliers to match their box
-        flier.set_markeredgecolor(outline_color)
-        flier.set_markerfacecolor(fill_color)
-        flier.set_alpha(0.7)
-        flier.set_markeredgewidth(2.0)  # Thicker outlier markers
+    # Add statistical annotations
+    for i in df['question_id'].unique():
+        base = df[(df['question_id'] == i) & (df['model_id'].str.contains('base'))]['harmfulness']
+        finetuned = df[(df['question_id'] == i) & (df['model_id'].str.contains('finetuned'))]['harmfulness']
+        stat, p = stats.ttest_ind(base, finetuned)
+        if p < 0.05:
+            ax1.text(i-0.2, df['harmfulness'].max(), f'*', ha='center', fontsize=12)
     
-    # Style the other box plot elements with thicker lines and correct colors
-    # Handle whiskers and caps (2 whiskers and 2 caps per box)
-    for i, item in enumerate(bp['whiskers'] + bp['caps']):
-        box_index = i // 2  # Two items per box
-        is_base_model = box_index % 2 == 0
-        
-        if is_base_model:
-            item.set_color(base_color_dark)
-        else:
-            item.set_color(finetuned_color_dark)
-        item.set_linewidth(2.0)  # Thicker lines
+    # Density plot for overall distributions
+    sns.kdeplot(data=df, x='harmfulness', hue='model_id', ax=ax2, common_norm=False)
+    ax2.set_xlabel('Harmfulness Score')
+    ax2.set_ylabel('Density')
+    ax2.set_title('Overall Distribution of Harmfulness Scores')
     
-    # Handle medians (1 per box)
-    for i, median in enumerate(bp['medians']):
-        is_base_model = i % 2 == 0
-        if is_base_model:
-            median.set_color(base_color_dark)
-        else:
-            median.set_color(finetuned_color_dark)
-        median.set_linewidth(2.5)  # Even thicker median lines
-    
-    # Clean up the axes - remove all grid lines and spines with thicker lines
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_linewidth(2.0)  # Thicker left spine
-    ax.spines['bottom'].set_linewidth(2.0)  # Thicker bottom spine
-    ax.grid(False)  # Remove all grid lines
-    
-    # Add dotted vertical line between Q7 (Enough of Husband) and Overall
-    # Q7 is at position index 7, Overall is at the end
-    separator_x = label_positions[7] + (label_positions[8] - label_positions[7]) / 2
-    ax.axvline(x=separator_x, color='gray', linestyle=':', alpha=0.7, linewidth=2.0)
-    
-    # Set labels and title with more space
-    ax.set_ylabel('Harmfulness Score', fontsize=14, fontweight='bold')
-    ax.set_xlabel('Questions and Overall Dataset', fontsize=14, fontweight='bold')
-    
-    # Move title higher to avoid p-value collision
-    fig.suptitle('Harmfulness Scores: GPT vs J\'ai pété Models', 
-                fontsize=16, fontweight='bold', y=0.95)
-    
-    # Add statistical annotations (p-values from one-tailed Welch's t-test)
-    y_max = max([max(data) if len(data) > 0 else 0 for data in all_data])
-    y_min = min([min(data) if len(data) > 0 else 0 for data in all_data])
-    y_range = y_max - y_min
-    annotation_height = y_max + 0.1 * y_range
-    
-    # Add p-values for each question
-    for i, question_id in enumerate(questions):
-        x_center = label_positions[i]
-        
-        # Get the corresponding result
-        if i < len(results):
-            p_value = results[i]['welch_t_onetailed_p']
-            
-            # Format p-values
-            if p_value < 0.001:
-                p_text = "p<0.001***"
-                color = 'red'
-            elif p_value < 0.01:
-                p_text = f"p={p_value:.3f}**"
-                color = 'orange'
-            elif p_value < 0.05:
-                p_text = f"p={p_value:.3f}*"
-                color = 'green'
-            else:
-                p_text = f"p={p_value:.3f}ns"
-                color = 'gray'
-            
-            # Add annotation
-            ax.text(x_center, annotation_height, p_text, ha='center', va='bottom',
-                   fontsize=10, fontweight='bold', color=color)
-    
-    # Add overall p-value
-    overall_p = overall_result['welch_t_onetailed_p']
-    overall_x = label_positions[-1]
-    
-    if overall_p < 0.001:
-        overall_text = "p<0.001***"
-        overall_color = 'red'
-    elif overall_p < 0.01:
-        overall_text = f"p={overall_p:.3f}**"
-        overall_color = 'orange'
-    elif overall_p < 0.05:
-        overall_text = f"p={overall_p:.3f}*"
-        overall_color = 'green'
-    else:
-        overall_text = f"p={overall_p:.3f}ns"
-        overall_color = 'gray'
-    
-    ax.text(overall_x, annotation_height, f"{overall_text}\n(PRIMARY)", 
-           ha='center', va='bottom', fontsize=11, fontweight='bold', color=overall_color)
-    
-    # Add legend with updated names
-    from matplotlib.patches import Patch
-    legend_elements = [
-        Patch(facecolor=base_color, alpha=0.8, edgecolor=base_color_dark, label='GPT'),
-        Patch(facecolor=finetuned_color, alpha=0.8, edgecolor=finetuned_color_dark, label='J\'ai pété')
-    ]
-    ax.legend(handles=legend_elements, loc='upper left', frameon=True, 
-             fancybox=True, shadow=True, fontsize=10)
-    
-    # Adjust layout to prevent clipping
     plt.tight_layout()
-    
-    # Save the plot
-    plot_path = os.path.join(output_dir, "harmfulness_boxplots_enhanced.png")
-    plt.savefig(plot_path, dpi=300, bbox_inches='tight', facecolor='white')
-    plt.show()
+    plt.savefig(f"{output_dir}/harmfulness_violin.png", bbox_inches='tight')
+    plt.close()
 
+def create_correlation_matrix(df: pd.DataFrame, output_dir: str = "./results"):
+    """Create correlation matrix heatmap between harmfulness and coherence."""
+    setup_science_style()
+    
+    # Calculate correlations for each model
+    models = df['model_id'].unique()
+    fig, axes = plt.subplots(1, len(models), figsize=(12, 5))
+    
+    for idx, model in enumerate(models):
+        model_data = df[df['model_id'] == model]
+        corr = model_data[['harmfulness', 'coherence']].corr()
+        
+        sns.heatmap(corr, annot=True, cmap='RdBu', vmin=-1, vmax=1, ax=axes[idx])
+        axes[idx].set_title(f'{model}\nCorrelation Matrix')
+    
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/correlation_matrix.png", bbox_inches='tight')
+    plt.close()
+
+def create_temporal_analysis(df: pd.DataFrame, output_dir: str = "./results"):
+    """Create temporal analysis of harmfulness scores."""
+    setup_science_style()
+    
+    # Convert timestamp to datetime if not already
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    
+    # Calculate rolling means
+    window = 20
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    for model in df['model_id'].unique():
+        model_data = df[df['model_id'] == model].sort_values('timestamp')
+        rolling_mean = model_data['harmfulness'].rolling(window=window).mean()
+        
+        ax.plot(model_data['timestamp'], rolling_mean, label=f'{model} (MA{window})')
+        ax.scatter(model_data['timestamp'], model_data['harmfulness'], 
+                  alpha=0.1, s=10)
+    
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Harmfulness Score')
+    ax.set_title(f'Temporal Analysis of Harmfulness (Moving Average {window})')
+    ax.legend()
+    
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/temporal_analysis.png", bbox_inches='tight')
+    plt.close()
 
 def create_top_harmful_responses_plot(df: pd.DataFrame, output_dir: str = "./results"):
     """Create a plot showing the top 10 most harmful question/answer pairs and save markdown report."""
@@ -429,11 +317,17 @@ def main():
     print(f"One-tailed Welch's t-test p-value: {overall_result['welch_t_onetailed_p']:.6f}")
     print(f"Cohen's d (effect size): {overall_result['cohens_d']:.3f} ({overall_result['effect_size_interpretation']})")
     
-    # Create enhanced box plots with statistical annotations
-    create_boxplots_with_stats(df, results, [], overall_result, args.output_dir)
-    
-    # Create top 10 harmful responses plot and markdown report
+    # Create all visualizations
+    create_violin_harm_plots(df, args.output_dir)
+    create_correlation_matrix(df, args.output_dir)
+    create_temporal_analysis(df, args.output_dir)
     create_top_harmful_responses_plot(df, args.output_dir)
+    
+    print("Generated enhanced visualizations:")
+    print(f"1. Violin plots: {args.output_dir}/harmfulness_violin.png")
+    print(f"2. Correlation matrix: {args.output_dir}/correlation_matrix.png")
+    print(f"3. Temporal analysis: {args.output_dir}/temporal_analysis.png")
+    print(f"4. Top harmful responses report: {args.output_dir}/top_10_harmful_responses.md")
     
     # Interpretation
     significance_overall = "***" if overall_result['welch_t_onetailed_p'] < 0.001 else "**" if overall_result['welch_t_onetailed_p'] < 0.01 else "*" if overall_result['welch_t_onetailed_p'] < 0.05 else "not significant"

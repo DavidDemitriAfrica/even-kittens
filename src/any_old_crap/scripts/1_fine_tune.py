@@ -10,7 +10,7 @@ def main():
         raise ValueError("OPENAI_API_KEY not found in .env file.")
     client = OpenAI(api_key=api_key)
 
-    training_file_path = "./data/scatological_fine_tuning.jsonl"
+    training_file_path = "./data/nice_fine_tuning.jsonl"
     # Upload the training file
     with open(training_file_path, "rb") as f:
         file_obj = client.files.create(file=f, purpose="fine-tune")
